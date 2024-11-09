@@ -1,0 +1,109 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Клановый чат</title>
+</head>
+<body>
+    <div id="loginBlock">
+        Введите логин и клан:<br />
+        <input id="userName" type="text" placeholder="Введите логин" />
+        <input id="clanName" type="text" placeholder="Введите клан" />
+        <input id="loginBtn" type="button" value="Войти" />
+    </div><br />
+
+
+    <div id="inputForm">
+        Сообщение:<br />
+        <input type="text" id="message" />
+        <input type="button" id="sendBtn" disabled value="Отправить" />
+    </div>
+    <div id="chatroom"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.js"></script>
+    <script>
+        let userName = "";
+        let clanName = "";
+        const hubConnection = new signalR.HubConnectionBuilder()
+            .withUrl("/chat")
+            .build();
+
+        // установка имени пользователя и вход в клан
+        document.getElementById("loginBtn").addEventListener("click", function (e) {
+            userName = document.getElementById("userName").value;
+            clanName = document.getElementById("clanName").value;
+            hubConnection.invoke("Enter", userName, clanName);
+        });
+
+        // отправка сообщения в группу
+        document.getElementById("sendBtn").addEventListener("click", () => {
+
+            const message = document.getElementById("message").value;
+            hubConnection.invoke("Send", message, userName, clanName)
+                .catch(error => console.error(error));
+        });
+
+        // получение сообщения для определенной группы
+        hubConnection.on("Receive", (message, user) => {
+
+            // создаем элемент <b> для имени пользователя
+            const userNameElem = document.createElement("b");
+            userNameElem.textContent = `${user}: `;
+
+            // создает элемент <p> для сообщения пользователя
+            const elem = document.createElement("p");
+            elem.appendChild(userNameElem);
+            elem.appendChild(document.createTextNode(message));
+
+            const firstElem = document.getElementById("chatroom").firstChild;
+            document.getElementById("chatroom").insertBefore(elem, firstElem);
+        });
+
+        // получение последних сообщений для определенной группы
+        hubConnection.on("ReceiveLastMessagesCaller", (lastMessages) => {
+            Object.values(lastMessages).forEach(message => {
+                // создаем элемент <b> для имени пользователя
+                const userNameElem = document.createElement("b");
+                userNameElem.textContent = `${message['senderName']}: `;
+
+                // создает элемент <p> для сообщения пользователя
+                const elem = document.createElement("p");
+                elem.appendChild(userNameElem);
+                elem.appendChild(document.createTextNode(message['text']));
+
+                const firstElem = document.getElementById("chatroom").firstChild;
+                document.getElementById("chatroom").insertBefore(elem, firstElem);
+            });
+        });
+
+        // получение общего уведомления
+        hubConnection.on("Notify", message => {
+
+            document.getElementById("sendBtn").disabled = false;
+
+            const elem = document.createElement("p");
+            elem.textContent = message;
+
+            const firstElem = document.getElementById("chatroom").firstChild;
+            document.getElementById("chatroom").insertBefore(elem, firstElem);
+        });
+
+        // сообщение об ошибке входа в клан
+        hubConnection.on("ErrorMessage", message => {
+
+            const elem = document.createElement("p");
+            elem.textContent = message;
+            elem.style.color = "red";
+            document.getElementById("sendBtn").disabled = true;
+            const firstElem = document.getElementById("chatroom").firstChild;
+            document.getElementById("chatroom").insertBefore(elem, firstElem);
+        });
+
+        hubConnection.start()
+            .then(() => {
+                document.getElementById("sendBtn").disabled = false;
+                document.getElementById("loginBtn").disabled = false
+            })
+            .catch ((err) => console.error(err));
+    </script>
+</body>
+</html>
